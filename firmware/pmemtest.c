@@ -274,11 +274,18 @@ uint32_t marchb_test(uint32_t addr_size, uint32_t bits)
 #define PSEUDO_VALUES 64
 #define ARTISANAL_NUMBER 42
 static uint64_t random_seeds[PSEUDO_VALUES];
+static int bitcount = 0;
+
+void psrand_seed_x(uint64_t seed)
+{
+    bitcount = 0; // Reset offset
+    psrand_seed(seed);
+}
 
 void psrand_init_seeds()
 {
     int i;
-    psrand_seed(ARTISANAL_NUMBER);
+    psrand_seed_x(ARTISANAL_NUMBER);
     for (i = 0; i < PSEUDO_VALUES; i++) {
         random_seeds[i] = psrand_next();
     }
@@ -286,7 +293,6 @@ void psrand_init_seeds()
 
 uint32_t psrand_next_bits(uint32_t bits)
 {
-    static int bitcount = 0;
     static uint32_t cur_rand;
     uint32_t out;
 
@@ -314,14 +320,14 @@ uint32_t psrandom_test(uint32_t addr_size, uint32_t bits)
     for (i = 0; i < PSEUDO_VALUES; i++) {
         stat_cur_subtest = i >> 2;
         stat_cur_bit = i & 3;
-        psrand_seed(random_seeds[i]);
+        psrand_seed_x(random_seeds[i]);
         for (stat_cur_addr = 0; stat_cur_addr < addr_size; stat_cur_addr++) {
             bitsout = psrand_next_bits(bits);
             ram_write(stat_cur_addr, bitsout);
         }
 
         // Reseed and then read the data back
-        psrand_seed(random_seeds[i]);
+        psrand_seed_x(random_seeds[i]);
         for (stat_cur_addr = 0; stat_cur_addr < addr_size; stat_cur_addr++) {
             bitsout = psrand_next_bits(bits);
             bitsin = ram_read(stat_cur_addr);
@@ -339,19 +345,19 @@ uint32_t refresh_subtest(uint32_t addr_size, uint32_t bits, uint32_t time_delay)
     uint32_t bitsout;
     uint32_t bitsin;
 
-    psrand_seed(random_seeds[0]);
+    psrand_seed_x(random_seeds[0]);
     for (stat_cur_addr = 0; stat_cur_addr < addr_size; stat_cur_addr++) {
         bitsout = psrand_next_bits(bits);
-        ram_write(stat_cur_addr, bits);
+        ram_write(stat_cur_addr, bitsout);
     }
 
     sleep_us(time_delay);
 
-    psrand_seed(random_seeds[0]);
+    psrand_seed_x(random_seeds[0]);
     for (stat_cur_addr = 0; stat_cur_addr < addr_size; stat_cur_addr++) {
         bitsout = psrand_next_bits(bits);
         bitsin = ram_read(stat_cur_addr);
-        if (bits != bitsin) {
+        if (bitsout != bitsin) {
             return 1;
         }
     }
@@ -361,7 +367,12 @@ uint32_t refresh_subtest(uint32_t addr_size, uint32_t bits, uint32_t time_delay)
 
 uint32_t refresh_test(uint32_t addr_size, uint32_t bits)
 {
-    return refresh_subtest(addr_size, bits, 5000);
+    // DRAM refresh is specified at the highest rated temperature and is
+    // typically much longer at room temperature. Most DRAM chips we test
+    // are 2 or 4ms, but some can be more: the 44256 is 8ms, for example.
+    // For this test, we use 32ms which should catch leaky DRAM cells at
+    // room temperature. Feel free to modify if you want to customize.
+    return refresh_subtest(addr_size, bits, 32000);
 }
 
 
@@ -516,7 +527,7 @@ void show_test_gui()
     // Current test indicator
     paint_status(120, 35, 110, "      ");
     draw_icon(STATUS_ICON_X, STATUS_ICON_Y, &drum_icon0);
-    add_repeating_timer_ms(-100, drum_animation_cb, NULL, &drum_timer);
+    add_repeating_timer_ms(-200, drum_animation_cb, NULL, &drum_timer);
 }
 
 // Begins the RAM test with the selected RAM chip
@@ -612,6 +623,7 @@ void do_status()
     int test;
 
     if (gui_state == DO_TEST) {
+        sleep_ms(1); // Don't want to slam the CPU
         do_visualization();
 
         // Update the status text
@@ -628,6 +640,7 @@ void do_status()
             // No more drums
             cancel_repeating_timer(&drum_timer);
             queue_remove_blocking(&results_queue, &retval);
+            queue_try_remove(&stat_cur_test, &test); // Flush status queue
             // Show the completion status
             gui_state = TEST_RESULTS;
             st7789_fill(STATUS_ICON_X, STATUS_ICON_Y, 32, 32, COLOR_LTGRAY); // Erase icon
@@ -822,9 +835,9 @@ int main() {
     power_off();
 
     // Set up second core
-    queue_init(&call_queue, sizeof(queue_entry_t), 2);
-    queue_init(&results_queue, sizeof(int32_t), 2);
-    queue_init(&stat_cur_test, sizeof(int), 2);
+    queue_init(&call_queue, sizeof(queue_entry_t), 1);
+    queue_init(&results_queue, sizeof(int32_t), 1);
+    queue_init(&stat_cur_test, sizeof(int), 1);
 
     // Second core will wait for the call queue.
     multicore_launch_core1(core1_entry);
