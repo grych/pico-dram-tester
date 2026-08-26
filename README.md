@@ -94,7 +94,7 @@ screen.
 Before starting, connect the tester to a power source:
 
 * If you did not install U7 and U8, connect a bench supply to the GND, -5V, +5V, and +12V test points. Connect the Pico 2 USB jack to a power adapter or computer.
-* If you installed U7 and U8, connect a 5V bench supply to the 5VIN and GND test points. Instead of a bench supply, you could connect the Pico 2 USB jack to a power adapter, but you won't be able to control the voltage. A computer often has a much lower voltage and you may fail RAM chips that actually function at 5V.
+* If you installed U7 and U8, connect a 5V bench supply to the 5VIN and GND test points. Instead of a bench supply, you could connect the Pico 2 USB jack to a power adapter, but you won't be able to control the voltage. **A computer often has a much lower voltage and you may fail RAM chips that actually function at 5V.**
 
 1. Install the chip in the socket designated for that type of memory chip, following the pin 1 orientation (the pin 1 notch faces the ZIF socket lever). Note that some of the sockets are used for several types of memory.
 2. Rotate the selection knob until the correct part number is highlighted, and push down on the top of the selection knob (it's also a button!)
@@ -132,11 +132,13 @@ all failure modes. The Pico DRAM Tester uses more modern testing algorithms:
 
 * March-B. This is a sequence of linear reads and writes designed to catch address faults, stuck-at faults, transition faults, and coupling faults.
 * Pseudorandom test. This test loads a pseudorandom number sequence into the memory, reads it back, and checks to make sure it didn't change. The test is repeated with 64 different pseudorandom patterns to enhance coverage. The patterns are identical between runs, making the test repeatable. The test only uses pseudorandom data and does not randomize the address. This test can detect many pattern-sensitive faults.
-* Refresh test. This test loads a pattern into the memory, waits for a time delay, and then tries to read it back. The time delay is longer than a typical refresh rate. This test can detect data retention faults.
+* Refresh test. This test loads a pattern into the memory, waits for a time delay, and then tries to read it back. The time delay is longer than a typical refresh rate. This test can detect data retention faults. The default delay of 32ms may be adjusted by editing the line `return refresh_subtest(addr_size, bits, 32000);` with a new value, in microseconds.
 
-## Known Issues
+## Tips and Tricks
 
-* The 41128 test is not yet reliable.
+* Use a multimeter to check the voltage on the leftmost 5V test point to make sure your AC adapter is up to snuff! Lower voltages will cause memory chips to perform poorly and fail to meet their speed grade.
+* Have a memory chip that may be marginal? Try using a heat gun (without melting the board!) to warm it up and make it fail. Cold spray or an inverted air duster can help you hit the low temperature range.
+* Suspect contact problems with the sockets or the memory chip leads? Put it in the socket, close the lever, and then slide it sideways, which will clean the contacts and establish a better connection.
 
 ## Troubleshooting
 
@@ -144,7 +146,7 @@ Check your solder connections. Does the Pico 2 board show up in bootloader mode 
 
 The Pico DRAM Tester uses an overclocked Pico 2 configuration.
 Some Pico 2 boards may not work well at 300MHz, crashing or not drawing the GUI on the screen correctly.
-You may be able to get it working by editing pmemtest.c, find the line `vreg_set_voltage(VREG_VOLTAGE_1_15);` and change the voltage setting to `VREG_VOLTAGE_1_20`.
+You may be able to get it working by editing pmemtest.c, find the line `vreg_set_voltage(VREG_VOLTAGE_1_20);` and change the voltage setting to `VREG_VOLTAGE_1_25`.
 
 
 ## License
